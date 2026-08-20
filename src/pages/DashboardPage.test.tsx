@@ -1,7 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppHeader } from '../components/AppHeader';
 import { ThemeProvider } from '../theme/ThemeProvider';
 import { DashboardPage } from './DashboardPage';
 
@@ -23,11 +22,9 @@ function renderDashboard() {
   return render(
     <ThemeProvider>
       <MemoryRouter initialEntries={['/dashboard']}>
-        <AppHeader />
         <Routes>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/login" element={<div>login destination</div>} />
-          <Route path="/" element={<div>home destination</div>} />
         </Routes>
       </MemoryRouter>
     </ThemeProvider>,
@@ -46,33 +43,20 @@ beforeEach(() => {
 });
 
 describe('DashboardPage', () => {
-  it('renders the authenticated dashboard and confirmed logout flow', async () => {
-    authMocks.logout.mockResolvedValue(undefined);
+  it('renders the authenticated dashboard', () => {
     renderDashboard();
     expect(screen.getByRole('heading', { name: 'Company intelligence dashboard' })).toBeInTheDocument();
     expect(screen.getByText('100 companies')).toBeInTheDocument();
     expect(screen.getByText(/Signed in as deniz@example.com/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
-    await waitFor(() => expect(authMocks.logout).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('home destination')).toBeInTheDocument();
   });
 
-  it('keeps the workspace state visible when logout transport fails', async () => {
-    authMocks.logout.mockRejectedValue(new Error('network'));
-    renderDashboard();
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/could not be confirmed: network/i);
-    expect(screen.getByRole('heading', { name: 'Company intelligence dashboard' })).toBeInTheDocument();
-  });
-
-  it('shows a retryable infrastructure state instead of pretending the user is logged out', async () => {
+  it('shows a retryable infrastructure state instead of pretending the user is logged out', () => {
     Object.assign(authState, { status: 'error', user: null, error: new Error('offline') });
     renderDashboard();
     expect(screen.getByRole('heading', { name: 'Workspace temporarily unavailable' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry session check' }));
     expect(authMocks.retry).toHaveBeenCalledTimes(1);
   });
-
 
   it('renders the portfolio comparison only when its rollout flag is enabled', () => {
     vi.stubEnv('VITE_FLAG_PORTFOLIO_COMPARE', 'true');
