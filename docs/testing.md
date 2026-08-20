@@ -6,6 +6,8 @@ CompanyScope treats security boundaries, user journeys, product instrumentation 
 
 Vitest + V8 coverage enforce a **90% minimum for lines, statements, functions and branches**. `coverage.include` explicitly accounts for source modules that tests never import, so the threshold cannot be met by testing only utilities that happen to execute.
 
+Vitest uses an explicit unit/integration test allowlist (`src/**/*.test.{ts,tsx}` and `tools/**/*.test.ts`). Playwright specs live under `e2e/` and are collected only by Playwright, preventing cross-runner discovery and CI failures caused by executing Playwright `test()` calls inside Vitest.
+
 Covered behavior includes:
 
 - company discovery, search/filter/sort and routed detail exploration;
