@@ -16,7 +16,13 @@ export default [
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  { files: ['**/*.{ts,tsx}'], rules: { 'no-undef': 'off' } },
+  {
+    files: ['**/*.{ts,tsx}'],
+    languageOptions: {
+      parserOptions: { onUnsupportedTypeScriptVersion: 'error' },
+    },
+    rules: { 'no-undef': 'off' },
+  },
   {
     files: ['src/**/*.{ts,tsx}'],
     plugins: { 'jsx-a11y': jsxA11y },

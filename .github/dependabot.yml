@@ -8,6 +8,11 @@ updates:
       time: '06:00'
       timezone: Europe/Berlin
     open-pull-requests-limit: 6
+    # typescript-eslint 8.65.0 supports TypeScript >=4.8.4 <6.1.0.
+    # Keep the compiler on the supported 6.0.x line until that peer range moves.
+    ignore:
+      - dependency-name: typescript
+        versions: ['>=6.1.0']
     groups:
       production-minor-patch:
         dependency-type: production

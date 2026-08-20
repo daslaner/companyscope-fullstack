@@ -17,6 +17,8 @@ CompanyScope separates verification, security analysis, artifact creation and de
 
 Every install uses the committed lockfile through `npm ci` and the Node version in `.nvmrc`. `setup-node` caches npm's download cache; `node_modules` itself is not shared between jobs.
 
+The lint/compiler toolchain is deliberately compatibility-pinned: TypeScript is fixed to `6.0.3` while `typescript-eslint@8.65.0` supports TypeScript `<6.1.0`. ESLint is configured to error on unsupported TypeScript versions, and Dependabot ignores TypeScript releases `>=6.1.0` until the lint stack's peer range advances. This prevents automated dependency PRs from making `npm ci` unsatisfiable.
+
 For branch protection, require the stable **`CI / Quality Gate`** status rather than coupling repository rules to every internal job name.
 
 ## Build once, promote the same artifact
