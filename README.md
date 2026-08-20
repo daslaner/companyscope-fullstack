@@ -1,6 +1,6 @@
 # CompanyScope Product
 
-Senior fullstack/product-engineering portfolio project for a global company-intelligence SaaS experience. The repository combines a production-minded React application with a local Node BFF, explicit security boundaries, product instrumentation, feature delivery controls and documented trade-offs.
+Senior fullstack/product-engineering portfolio project for a global company-intelligence SaaS experience. The repository combines a production-minded React application, Node BFF, explicit security boundaries, product instrumentation, browser E2E coverage and an artifact-promotion CI/CD design.
 
 **Author:** Deniz Aslaner
 
@@ -11,17 +11,22 @@ Senior fullstack/product-engineering portfolio project for a global company-inte
 - Recharts analytics with accessible text summaries and three contextual charts per company tab
 - Leaflet geographic visualization with an equivalent keyboard-accessible list/table path
 - Deep-linkable Overview, Financials, Operations, Security, People, Signals and feature-flagged Explainer routes
-- Search, filtering, sorting and a local-first saved-company shortlist
+- Search, filtering, sorting, local-first saved-company research and portfolio comparison
 - TanStack Query for authenticated server state and Explainer mutations
-- Typed product analytics wired to search, company opens, tabs, saves, workspace creation and Explainer requests
-- Feature flags for saved views, risk explainability, portfolio compare and the AI Explainer
-- Local Node BFF with registration/login/logout/session endpoints and the OpenAI Responses API Explainer
+- Typed, vendor-neutral product analytics wired to decision points
+- Feature flags that gate real product paths rather than documentation-only switches
+- Node BFF with registration/login/logout/session APIs and a bounded OpenAI Responses API Explainer
 - Opaque HttpOnly sessions, session-bound CSRF, exact Origin checks, scrypt password hashing, bounded bodies and separate rate limits
-- Storybook + accessibility checks + strict test coverage + GitHub Actions + CodeQL + Dependency Review + Dependabot
+- Production SPA+BFF runtime with security headers, safe static path handling, health/revision metadata and graceful shutdown
+- Vitest 90% coverage gates + Playwright production-runtime E2E
+- Storybook + accessibility checks
+- Parallel GitHub Actions quality gates, CodeQL, Dependency Review, Dependabot and full-SHA action pinning
+- Build-once artifact promotion to GitHub Pages and a smoke-tested GHCR container
+- Optional protected production deployment plus immutable-SHA rollback workflow
 
 ## Local development
 
-Prerequisite: **Node.js 24.18.0 LTS**. The supported engine range is `>=24.15.0 <25` and `.nvmrc` is committed.
+Prerequisite: **Node.js 24.18.0**. The supported engine range is `>=24.15.0 <25` and `.nvmrc` is committed.
 
 ```bash
 nvm install
@@ -46,31 +51,73 @@ Open `http://localhost:5173`, register a local account and use the protected wor
 
 ### AI Explainer
 
-Set `OPENAI_API_KEY` in `.env` to enable the Explainer. The browser sends only an allow-listed company identifier and focus. The authenticated BFF validates Origin + CSRF, builds the model context from trusted local data and keeps the provider credential server-side.
+Set `OPENAI_API_KEY` in `.env` to enable the Explainer. The browser sends only an allow-listed company identifier and focus. The authenticated BFF validates Origin + CSRF, builds model context from trusted local data and keeps the provider credential server-side.
 
-For a frontend-only preview, set `VITE_REMOTE_AUTH=false`; this activates the explicitly labeled token-free demo auth adapter while leaving production-shaped auth code in the repo.
+For a frontend-only preview, set `VITE_REMOTE_AUTH=false`; this activates the explicitly labelled token-free demo auth adapter. Production builds use same-origin BFF auth through the committed `.env.production` public build settings.
+
+## Production build and container
+
+```bash
+npm run build:production
+```
+
+This creates:
+
+```text
+dist/                    # Vite browser build
+server-dist/server.mjs   # bundled Node BFF + SPA server
+```
+
+Run it locally over HTTP for a smoke test:
+
+```bash
+APP_ORIGIN=http://127.0.0.1:4100 \
+NODE_ENV=production \
+SESSION_COOKIE_SECURE=false \
+SERVE_STATIC=true \
+npm run serve:production
+```
+
+The Dockerfile consumes only the built browser/BFF artifacts and runs as the non-root `node` user. Real HTTPS deployments should keep the default production `Secure` session cookie behavior.
 
 ## Product thesis
 
-Company research is slow when evidence is fragmented and risk signals are hard to compare. CompanyScope turns a broad dataset into a progressive workflow: scan the market, narrow candidates, inspect categorized evidence, save companies, and request a bounded explanation only when it helps a decision.
+Company research is slow when evidence is fragmented and risk signals are hard to compare. CompanyScope turns a broad dataset into a progressive workflow: scan the market, narrow candidates, inspect categorized evidence, save/compare companies, and request a bounded explanation only when it helps a decision.
 
 Product events are vendor-neutral and privacy-minimal. KPI values shown in the demo are explicitly labelled illustrative; the implementation demonstrates where trustworthy measurement is captured rather than pretending synthetic portfolio data is production telemetry.
 
-## Architecture
+## Architecture and security
 
-The browser depends on typed ports and shared schemas. Authentication and model access cross the local BFF boundary; secrets and session identifiers never enter client JavaScript. Route-level lazy loading keeps dashboard/detail-heavy dependencies out of unrelated route chunks, while TanStack Query owns server-state lifecycles.
+The browser depends on typed ports and shared schemas. Authentication and model access cross the BFF trust boundary; secrets and session identifiers never enter client JavaScript. Route-level lazy loading keeps dashboard/detail-heavy dependencies out of unrelated route chunks, while TanStack Query owns server-state lifecycles.
 
-See `docs/architecture.md`, `docs/decision-log.md`, `docs/explainer.md`, `docs/metrics.md`, `docs/accessibility.md` and `SECURITY.md` for the rationale and production scale boundaries.
+The production Node process can serve both the SPA and `/api/*`. It prevents static path traversal, keeps API 404s distinct from SPA fallback, emits hardened response headers and reports its build commit from `/api/health` for deployment verification.
 
-## Quality gate
+See `docs/architecture.md`, `docs/decision-log.md`, `docs/explainer.md`, `docs/metrics.md`, `docs/accessibility.md` and `SECURITY.md` for rationale and deliberate production-scale boundaries.
+
+## Local quality gates
 
 ```bash
 npm run verify
 npm run audit:prod
 ```
 
-`verify` runs ESLint, strict browser + tools TypeScript checks, Vitest V8 coverage with **90% minimum thresholds for lines, statements, functions and branches**, the production Vite build and Storybook build. Source modules are explicitly included in the coverage denominator so unimported files cannot silently escape measurement.
+`verify` runs ESLint, strict browser + BFF/tools + E2E TypeScript checks, Vitest V8 coverage with **90% minimum thresholds for lines, statements, functions and branches**, the production browser/BFF build and Storybook build.
+
+For the full browser/runtime check:
+
+```bash
+npx playwright install chromium
+npm run test:e2e:local
+```
 
 ## CI/CD
 
-The committed `package-lock.json` is used with `npm ci` in GitHub Actions. CI runs the same verification gate and a production dependency audit. Separate least-privilege workflows provide CodeQL and high-severity Dependency Review; Dependabot covers npm and GitHub Actions updates. Storybook deploys to GitHub Pages only after the `master` CI workflow succeeds, and the deploy checks out the exact verified commit SHA.
+GitHub CI parallelizes lint, typecheck, unit/coverage, production build, dependency audit, Playwright E2E and container smoke testing. A stable **`CI / Quality Gate`** aggregates those jobs for branch protection.
+
+The browser/BFF and Storybook are built once in CI. Playwright and the container stage consume the verified production artifact. Successful `master` CI publishes that same smoke-tested container to GHCR under an immutable full commit SHA; Storybook Pages also downloads the exact CI artifact rather than rebuilding it.
+
+Production deployment is deliberately provider-neutral and opt-in behind a protected GitHub Environment. When configured, deployment must report the exact expected commit through `/api/health`. A manual rollback workflow can redeploy a previously verified immutable SHA.
+
+Third-party GitHub Actions are pinned to full commit SHAs and Dependabot keeps those pins reviewable.
+
+After pushing the repository, apply the branch protection, Dependency Graph, Pages and optional production Environment settings in [`docs/github-repository-settings.md`](docs/github-repository-settings.md). Detailed workflow design is in [`docs/ci-cd.md`](docs/ci-cd.md).
