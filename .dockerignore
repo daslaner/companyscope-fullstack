@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+coverage
+storybook-static
+playwright-report
+test-results
+*.log
+.env
+.env.*
+!.env.production

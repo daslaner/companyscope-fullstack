@@ -3,7 +3,17 @@ import jsxA11y from 'eslint-plugin-jsx-a11y';
 import tseslint from 'typescript-eslint';
 
 export default [
-  { ignores: ['dist/**', 'coverage/**', 'storybook-static/**', 'node_modules/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'server-dist/**',
+      'coverage/**',
+      'storybook-static/**',
+      'playwright-report/**',
+      'test-results/**',
+      'node_modules/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { files: ['**/*.{ts,tsx}'], rules: { 'no-undef': 'off' } },
@@ -18,7 +28,7 @@ export default [
     },
   },
   {
-    files: ['tools/**/*.ts'],
+    files: ['tools/**/*.ts', 'e2e/**/*.ts', 'playwright.config.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],

@@ -13,7 +13,7 @@ export default defineConfig({
       reporter: ['text', 'json-summary', 'html', 'lcov'],
       reportsDirectory: './coverage',
       reportOnFailure: true,
-      include: ['src/**/*.{ts,tsx}', 'tools/explainer-core.ts', 'tools/auth-core.ts'],
+      include: ['src/**/*.{ts,tsx}', 'tools/explainer-core.ts', 'tools/auth-core.ts', 'tools/static-core.ts'],
       exclude: [
         'src/**/*.test.{ts,tsx}',
         'src/**/*.stories.tsx',

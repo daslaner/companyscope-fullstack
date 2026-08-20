@@ -1,4 +1,6 @@
+import { readFile, stat } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { join, resolve } from 'node:path';
 import { loadEnvFile } from 'node:process';
 import OpenAI from 'openai';
 import { loginSchema, registrationSchema, type AuthUser } from '../src/shared/auth';
@@ -19,6 +21,7 @@ import {
   parseExplainerInput,
   responseHeaders,
 } from './explainer-core';
+import { safeStaticPath, staticResponseHeaders } from './static-core';
 
 try {
   loadEnvFile();
@@ -27,9 +30,21 @@ try {
 }
 
 const port = Number(process.env.API_PORT ?? 4100);
-const allowedOrigin = process.env.APP_ORIGIN ?? 'http://localhost:5173';
+const host = process.env.HOST ?? '127.0.0.1';
+const configuredOrigin = process.env.APP_ORIGIN;
+const allowedOrigin = configuredOrigin ?? 'http://localhost:5173';
 const model = process.env.OPENAI_MODEL ?? 'gpt-5.6';
 const isProduction = process.env.NODE_ENV === 'production';
+const secureSessionCookie = process.env.SESSION_COOKIE_SECURE
+  ? process.env.SESSION_COOKIE_SECURE === 'true'
+  : isProduction;
+const staticRoot = process.env.SERVE_STATIC === 'true'
+  ? resolve(process.env.STATIC_DIR ?? 'dist')
+  : null;
+
+if (isProduction && !configuredOrigin) {
+  throw new Error('APP_ORIGIN is required when NODE_ENV=production.');
+}
 const sessionTtlMs = Math.max(1, Number(process.env.SESSION_TTL_HOURS ?? 8)) * 60 * 60 * 1000;
 const sessionCookieName = 'companyscope.sid';
 const authBodyBytes = 16_384;
@@ -115,7 +130,7 @@ function issueSession(res: ServerResponse, origin: string | undefined, user: Aut
     origin,
     {
       'set-cookie': serializeSessionCookie(session.token, {
-        secure: isProduction,
+        secure: secureSessionCookie,
         maxAgeSeconds: Math.floor(sessionTtlMs / 1000),
       }),
     },
@@ -128,6 +143,55 @@ function requireJson(req: IncomingMessage, res: ServerResponse, origin?: string)
     return false;
   }
   return true;
+}
+
+async function serveStatic(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
+  if (!staticRoot || (req.method !== 'GET' && req.method !== 'HEAD')) return false;
+
+  let pathname: string;
+  try {
+    pathname = new URL(req.url ?? '/', 'http://companyscope.local').pathname;
+  } catch {
+    return false;
+  }
+
+  const requestedPath = safeStaticPath(staticRoot, pathname);
+  if (!requestedPath) {
+    res.writeHead(400, staticResponseHeaders(join(staticRoot, 'index.html'), isProduction));
+    res.end('Bad request');
+    return true;
+  }
+
+  let filePath = requestedPath;
+  try {
+    const fileStats = await stat(filePath);
+    if (fileStats.isDirectory()) filePath = join(filePath, 'index.html');
+    await stat(filePath);
+  } catch {
+    // Client-side routes use the SPA shell; missing static assets still return a real 404.
+    if (pathname.startsWith('/assets/') || pathname.includes('.')) {
+      res.writeHead(404, staticResponseHeaders(join(staticRoot, 'index.html'), isProduction));
+      res.end('Not found');
+      return true;
+    }
+    filePath = join(staticRoot, 'index.html');
+  }
+
+  try {
+    const body = await readFile(filePath);
+    const immutable = pathname.startsWith('/assets/');
+    res.writeHead(200, staticResponseHeaders(filePath, isProduction, immutable));
+    if (req.method === 'HEAD') {
+      res.end();
+      return true;
+    }
+    res.end(body);
+    return true;
+  } catch {
+    res.writeHead(404, staticResponseHeaders(join(staticRoot, 'index.html'), isProduction));
+    res.end('Not found');
+    return true;
+  }
 }
 
 const server = createServer(async (req, res) => {
@@ -145,7 +209,11 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'GET' && url === '/api/health') {
-    return send(res, 200, { status: 'ok' }, origin);
+    return send(res, 200, {
+      status: 'ok',
+      version: process.env.APP_VERSION ?? 'dev',
+      commit: process.env.APP_COMMIT ?? 'local',
+    }, origin);
   }
 
   if (req.method === 'GET' && url === '/api/me') {
@@ -197,11 +265,11 @@ const server = createServer(async (req, res) => {
     if (!trustedOrigin(req)) return send(res, 403, { error: 'UNTRUSTED_ORIGIN' }, origin);
     const current = requireSession(req);
     if (!current) {
-      return send(res, 204, null, origin, { 'set-cookie': clearSessionCookie(isProduction) });
+      return send(res, 204, null, origin, { 'set-cookie': clearSessionCookie(secureSessionCookie) });
     }
     if (!csrfIsValid(req, current.token)) return send(res, 403, { error: 'CSRF_INVALID' }, origin);
     sessions.destroy(current.token);
-    return send(res, 204, null, origin, { 'set-cookie': clearSessionCookie(isProduction) });
+    return send(res, 204, null, origin, { 'set-cookie': clearSessionCookie(secureSessionCookie) });
   }
 
   if (req.method === 'POST' && url === '/api/explain') {
@@ -245,12 +313,31 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  if (url.startsWith('/api/')) return send(res, 404, { error: 'NOT_FOUND' }, origin);
+  if (await serveStatic(req, res)) return;
+
   return send(res, 404, { error: 'NOT_FOUND' }, origin);
 });
 
 const sweepTimer = setInterval(() => sessions.sweep(), 15 * 60 * 1000);
 sweepTimer.unref();
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`CompanyScope BFF listening on http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  console.log(`CompanyScope fullstack server listening on http://${host}:${port}`);
 });
+
+function shutdown(signal: NodeJS.Signals) {
+  console.log(`Received ${signal}; closing CompanyScope server.`);
+  const forceExit = setTimeout(() => process.exit(1), 10_000);
+  forceExit.unref();
+  server.close((error) => {
+    clearTimeout(forceExit);
+    if (error) {
+      console.error(error);
+      process.exitCode = 1;
+    }
+  });
+}
+
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));
