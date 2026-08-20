@@ -21,8 +21,9 @@ export function AppHeader() {
 
     setLogoutError('');
     try {
-      await auth.logout();
-      navigate('/');
+      const logoutRequest = auth.logout();
+      navigate('/', { replace: true });
+      await logoutRequest;
     } catch (cause) {
       setLogoutError(
         cause instanceof Error
