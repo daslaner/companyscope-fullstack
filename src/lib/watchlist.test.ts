@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readWatchlist, subscribeWatchlist, toggleWatchlist } from './watchlist';
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe('watchlist persistence', () => {
   it('adds, removes, trims and ignores empty identifiers', () => {

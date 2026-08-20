@@ -5,7 +5,9 @@ import { toggleWatchlist } from '../lib/watchlist';
 import { analytics } from '../product/analytics';
 import { SavedCompanies } from './SavedCompanies';
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe('SavedCompanies', () => {
   it('shows an actionable empty state', () => {

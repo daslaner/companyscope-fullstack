@@ -17,7 +17,10 @@ function renderPanel() {
   );
 }
 
-beforeEach(() => vi.mocked(requestCompanyExplainer).mockReset());
+beforeEach(() => {
+  // Never return the mock from a Vitest hook: returned functions are treated as cleanup callbacks.
+  vi.mocked(requestCompanyExplainer).mockReset();
+});
 
 describe('ExplainerPanel', () => {
   it('associates each explainer option with an accessible radio control', () => {
@@ -44,15 +47,19 @@ describe('ExplainerPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Generate explainer' }));
 
     await waitFor(() => expect(requestCompanyExplainer).toHaveBeenCalledWith(company.id, 'security'));
-    expect(await screen.findByRole('button', { name: 'Generating…' })).toBeDisabled();
 
-    await act(async () => {
-      resolveRequest({
-        explanation: 'Structured security explanation',
-        model: 'test-model',
-        generatedAt: '2026-08-18T12:00:00.000Z',
+    try {
+      expect(await screen.findByRole('button', { name: 'Generating…' })).toBeDisabled();
+    } finally {
+      // Always settle the deferred mutation so a failed assertion cannot leak async work into the next test.
+      await act(async () => {
+        resolveRequest({
+          explanation: 'Structured security explanation',
+          model: 'test-model',
+          generatedAt: '2026-08-18T12:00:00.000Z',
+        });
       });
-    });
+    }
 
     expect(await screen.findByText('Structured security explanation')).toBeInTheDocument();
     expect(screen.getByText(/test-model/)).toBeInTheDocument();

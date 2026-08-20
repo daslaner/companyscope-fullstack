@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { toggleWatchlist } from '../lib/watchlist';
 import { PortfolioComparePanel } from './PortfolioComparePanel';
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe('PortfolioComparePanel', () => {
   it('requires two saved companies before comparison', () => {

@@ -11,7 +11,9 @@ import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe('design-system and shell components', () => {
   it('covers button and badge variants plus card passthrough props', () => {
