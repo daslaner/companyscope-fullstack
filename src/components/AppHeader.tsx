@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useOptionalAuth } from '../auth/AuthProvider';
+import { replaceDocument } from '../lib/browserNavigation';
 import { Button } from './ui/Button';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -13,7 +14,6 @@ const navClass = ({ isActive }: { isActive: boolean }) =>
 
 export function AppHeader() {
   const auth = useOptionalAuth();
-  const navigate = useNavigate();
   const [logoutError, setLogoutError] = useState('');
 
   const signOut = async () => {
@@ -21,9 +21,8 @@ export function AppHeader() {
 
     setLogoutError('');
     try {
-      const logoutRequest = auth.logout();
-      navigate('/', { replace: true });
-      await logoutRequest;
+      await auth.logout();
+      replaceDocument('/');
     } catch (cause) {
       setLogoutError(
         cause instanceof Error

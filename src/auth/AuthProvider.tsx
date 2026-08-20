@@ -49,7 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logoutMutation = useMutation({
     mutationFn: authApi.logout,
-    onSuccess: refreshSession,
   });
 
   const session = sessionQuery.data;

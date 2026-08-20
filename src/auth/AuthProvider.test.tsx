@@ -68,11 +68,10 @@ beforeEach(() => {
 });
 
 describe('AuthProvider', () => {
-  it('hydrates the authenticated session and refreshes it after login/logout mutations', async () => {
+  it('hydrates the session, refreshes after login and keeps logout finalization with the app shell', async () => {
     vi.mocked(authApi.getSession)
       .mockResolvedValueOnce({ status: 'anonymous' })
-      .mockResolvedValueOnce({ status: 'authenticated', user })
-      .mockResolvedValueOnce({ status: 'anonymous' });
+      .mockResolvedValueOnce({ status: 'authenticated', user });
     vi.mocked(authApi.login).mockResolvedValue(user);
     vi.mocked(authApi.logout).mockResolvedValue(undefined);
 
@@ -84,8 +83,9 @@ describe('AuthProvider', () => {
     expect(screen.getByText('authenticated')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'logout' }));
-    await waitFor(() => expect(screen.getByText('anonymous')).toBeInTheDocument());
-    expect(authApi.getSession).toHaveBeenCalledTimes(3);
+    await waitFor(() => expect(authApi.logout).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('authenticated')).toBeInTheDocument();
+    expect(authApi.getSession).toHaveBeenCalledTimes(2);
   });
 
   it('supports registration and retrying a failed session check', async () => {

@@ -1,12 +1,17 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useOptionalAuth } from '../auth/AuthProvider';
+import { replaceDocument } from '../lib/browserNavigation';
 import { ThemeProvider } from '../theme/ThemeProvider';
 import { AppHeader } from './AppHeader';
 
 vi.mock('../auth/AuthProvider', () => ({
   useOptionalAuth: vi.fn(),
+}));
+
+vi.mock('../lib/browserNavigation', () => ({
+  replaceDocument: vi.fn(),
 }));
 
 const user = {
@@ -18,10 +23,11 @@ const user = {
 
 beforeEach(() => {
   vi.mocked(useOptionalAuth).mockReset();
+  vi.mocked(replaceDocument).mockReset();
 });
 
 describe('AppHeader logout navigation', () => {
-  it('leaves protected routes before session refresh can redirect to login', async () => {
+  it('replaces the document only after the server confirms logout', async () => {
     let resolveLogout!: () => void;
     const logout = vi.fn(
       () =>
@@ -45,10 +51,6 @@ describe('AppHeader logout navigation', () => {
       <ThemeProvider>
         <MemoryRouter initialEntries={['/dashboard']}>
           <AppHeader />
-          <Routes>
-            <Route path="/dashboard" element={<p>Protected workspace</p>} />
-            <Route path="/" element={<p>Public home</p>} />
-          </Routes>
         </MemoryRouter>
       </ThemeProvider>,
     );
@@ -56,8 +58,38 @@ describe('AppHeader logout navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
 
     expect(logout).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('Public home')).toBeInTheDocument();
+    expect(replaceDocument).not.toHaveBeenCalled();
 
     resolveLogout();
+
+    await waitFor(() => expect(replaceDocument).toHaveBeenCalledWith('/'));
+  });
+
+  it('does not navigate when logout cannot be confirmed', async () => {
+    const logout = vi.fn().mockRejectedValue(new Error('network'));
+
+    vi.mocked(useOptionalAuth).mockReturnValue({
+      status: 'authenticated',
+      user,
+      error: null,
+      busy: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      logout,
+      retry: vi.fn(),
+    });
+
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AppHeader />
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign out could not be confirmed: network');
+    expect(replaceDocument).not.toHaveBeenCalled();
   });
 });

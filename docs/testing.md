@@ -32,7 +32,7 @@ Playwright runs Chromium against the **built production application + bundled BF
 - registration establishes a server session;
 - the opaque session cookie is HttpOnly and unavailable through `document.cookie`;
 - a user can open and save a company, then see it in the workspace;
-- logout returns the UI to an anonymous state;
+- confirmed logout replaces the document at `/`, rehydrates an anonymous session and cannot be intercepted by the workspace route guard;
 - a state-changing API call with an untrusted Origin is rejected.
 
 CI installs only Chromium and its OS dependencies. On failure, Playwright traces/screenshots/videos are uploaded as short-lived diagnostics.

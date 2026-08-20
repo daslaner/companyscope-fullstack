@@ -12,7 +12,7 @@ Shared authentication schemas live in `src/shared/auth.ts` so client validation 
 
 ## Server state
 
-`AuthProvider` uses TanStack Query for `/api/me` and mutations for login, registration and logout. A 401 becomes an explicit anonymous state; network/5xx failures become a retryable infrastructure state and are never silently treated as logout. A failed logout leaves the authenticated UI in place until the server confirms the session ended.
+`AuthProvider` uses TanStack Query for `/api/me` and mutations for login, registration and logout. A 401 becomes an explicit anonymous state; network/5xx failures become a retryable infrastructure state and are never silently treated as logout. A failed logout leaves the authenticated UI in place until the server confirms the session ended. After a confirmed logout, the app shell performs a full document replacement to `/` instead of refetching the session inside the protected route tree. This deliberately flushes in-memory client state and prevents route guards from racing the explicit sign-out destination.
 
 ## Authentication boundary
 
