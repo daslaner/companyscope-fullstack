@@ -117,6 +117,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Upload verified Storybook
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: storybook-${{ github.sha }}
@@ -225,8 +226,10 @@ jobs:
 
           curl --fail --silent http://127.0.0.1:4100/companies/northstar-berlin-security/security | grep -q 'id="root"'
       - name: Export tested container image
+        if: ${{ github.event_name == 'push' }}
         run: docker save companyscope-ci:${GITHUB_SHA} | gzip -1 > companyscope-image.tar.gz
       - name: Upload tested container image
+        if: ${{ github.event_name == 'push' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: container-image-${{ github.sha }}
