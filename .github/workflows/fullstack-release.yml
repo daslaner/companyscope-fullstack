@@ -1,0 +1,111 @@
+name: Fullstack Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+
+permissions:
+  actions: read
+  contents: read
+  packages: write
+
+concurrency:
+  group: fullstack-release-master
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish tested image to GHCR
+    if: ${{ github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Download container tested by CI
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: container-image-${{ github.event.workflow_run.head_sha }}
+          path: release
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Load tested image
+        run: gunzip -c release/companyscope-image.tar.gz | docker load
+
+      - name: Authenticate to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Publish immutable and channel tags
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          source="companyscope-ci:${RELEASE_SHA}"
+          docker tag "$source" "$image:${RELEASE_SHA}"
+          docker tag "$source" "$image:master"
+          docker tag "$source" "$image:latest"
+          docker push "$image:${RELEASE_SHA}"
+          docker push "$image:master"
+          docker push "$image:latest"
+          echo "### Fullstack image published" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$image:${RELEASE_SHA}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy production
+    needs: publish
+    if: ${{ vars.ENABLE_PRODUCTION_DEPLOY == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Validate deployment configuration
+        env:
+          DEPLOY_WEBHOOK: ${{ secrets.PRODUCTION_DEPLOY_WEBHOOK }}
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+        run: |
+          test -n "$DEPLOY_WEBHOOK"
+          test -n "$HEALTH_URL"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Trigger deployment of the immutable verified image
+        env:
+          DEPLOY_WEBHOOK: ${{ secrets.PRODUCTION_DEPLOY_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${RELEASE_SHA}"
+          payload=$(printf '{"image":"%s","sha":"%s"}' "$image" "$RELEASE_SHA")
+          curl --fail --silent --show-error --retry 3 \
+            --header 'content-type: application/json' \
+            --data "$payload" \
+            --request POST \
+            "$DEPLOY_WEBHOOK"
+
+      - name: Verify exact production revision
+        env:
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            body=$(curl --fail --silent "$HEALTH_URL" || true)
+            if grep -Fq '"status":"ok"' <<< "$body" && grep -Fq "\"commit\":\"${RELEASE_SHA}\"" <<< "$body"; then
+              echo "Production is healthy on ${RELEASE_SHA}."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production did not report the expected revision ${RELEASE_SHA}." >&2
+          exit 1

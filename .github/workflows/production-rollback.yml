@@ -1,0 +1,65 @@
+name: Production Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: Full 40-character commit SHA of a previously published verified image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: Roll back immutable image
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    env:
+      RELEASE_SHA: ${{ inputs.image_sha }}
+    steps:
+      - name: Validate rollback target and configuration
+        env:
+          DEPLOY_WEBHOOK: ${{ secrets.PRODUCTION_DEPLOY_WEBHOOK }}
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+        run: |
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test -n "$DEPLOY_WEBHOOK"
+          test -n "$HEALTH_URL"
+
+      - name: Deploy selected immutable image
+        env:
+          DEPLOY_WEBHOOK: ${{ secrets.PRODUCTION_DEPLOY_WEBHOOK }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:${RELEASE_SHA}"
+          payload=$(printf '{"image":"%s","sha":"%s","reason":"manual-rollback"}' "$image" "$RELEASE_SHA")
+          curl --fail --silent --show-error --retry 3 \
+            --header 'content-type: application/json' \
+            --data "$payload" \
+            --request POST \
+            "$DEPLOY_WEBHOOK"
+
+      - name: Verify rollback revision
+        env:
+          HEALTH_URL: ${{ vars.PRODUCTION_HEALTH_URL }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            body=$(curl --fail --silent "$HEALTH_URL" || true)
+            if grep -Fq '"status":"ok"' <<< "$body" && grep -Fq "\"commit\":\"${RELEASE_SHA}\"" <<< "$body"; then
+              echo "Rollback completed on ${RELEASE_SHA}."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Rollback target ${RELEASE_SHA} did not become healthy." >&2
+          exit 1
