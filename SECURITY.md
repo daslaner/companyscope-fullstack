@@ -22,7 +22,7 @@ The optional `VITE_REMOTE_AUTH=false` mode is a frontend showcase adapter only. 
 ## Supply-chain and CI controls
 
 - Pull requests run high-severity Dependency Review.
-- CodeQL scans JavaScript/TypeScript on main, pull requests and weekly.
+- CodeQL scans JavaScript/TypeScript on master, pull requests and weekly.
 - CI runs `npm audit --omit=dev --audit-level=high` after the reproducible install and quality gate.
 - Dependabot tracks npm and GitHub Actions updates.
 - Workflows use scoped permissions; Storybook deployment is isolated to GitHub Pages permissions.

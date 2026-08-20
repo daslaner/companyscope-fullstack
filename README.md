@@ -73,4 +73,4 @@ npm run audit:prod
 
 ## CI/CD
 
-The committed `package-lock.json` is used with `npm ci` in GitHub Actions. CI runs the same verification gate and a production dependency audit. Separate least-privilege workflows provide CodeQL and high-severity Dependency Review; Dependabot covers npm and GitHub Actions updates. Storybook deploys to GitHub Pages only after the `main` CI workflow succeeds, and the deploy checks out the exact verified commit SHA.
+The committed `package-lock.json` is used with `npm ci` in GitHub Actions. CI runs the same verification gate and a production dependency audit. Separate least-privilege workflows provide CodeQL and high-severity Dependency Review; Dependabot covers npm and GitHub Actions updates. Storybook deploys to GitHub Pages only after the `master` CI workflow succeeds, and the deploy checks out the exact verified commit SHA.
